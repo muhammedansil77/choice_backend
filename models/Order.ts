@@ -8,6 +8,7 @@ export interface IOrder extends Document {
         sizeOrName: string;
     };
     coinsSpent: number;
+    quantity: number;
     status: 'pending' | 'approved' | 'rejected';
 }
 
@@ -19,6 +20,7 @@ const OrderSchema: Schema = new Schema({
         sizeOrName: { type: String, required: true },
     },
     coinsSpent: { type: Number, required: true },
+    quantity: { type: Number, default: 1 },
     status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
 }, { timestamps: true });
 
