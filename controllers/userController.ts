@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import User from '../models/User';
+import Transaction from '../models/Transaction';
 
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -111,6 +112,15 @@ export const addCoins = async (req: Request, res: Response): Promise<void> => {
         if (user) {
             user.coinBalance = (user.coinBalance || 0) + Number(amount);
             await user.save();
+
+            // Create transaction for history
+            await Transaction.create({
+                user: user._id,
+                amount: Number(amount),
+                type: 'credit',
+                description: 'Coins added by Admin'
+            });
+
             res.json({ message: 'Coins added successfully', user });
         } else {
             res.status(404).json({ message: 'User not found' });
