@@ -10,7 +10,7 @@ export interface ITransaction extends Document {
 const TransactionSchema: Schema = new Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     amount: { type: Number, required: true },
-    type: { type: String, enum: ['added', 'deducted', 'purchase'], required: true },
+    type: { type: String, enum: ['credit', 'debit', 'purchase', 'added', 'deducted'], required: true },
     description: { type: String, required: true },
 }, { timestamps: true });
 
