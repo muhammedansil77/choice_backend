@@ -4,7 +4,7 @@ import User from '../models/User';
 
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { name, email, password, role } = req.body;
+        const { name, email, password, role, phoneNumber } = req.body;
 
         const userExists = await User.findOne({ email });
         if (userExists) {
@@ -19,6 +19,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
             name,
             email,
             password: hashedPassword,
+            phoneNumber,
             coinBalance: 0,
             role: role === 'admin' ? 'admin' : 'user',
             status: 'active',
@@ -32,7 +33,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 
 export const createUser = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { name, email, password, coinBalance } = req.body;
+        const { name, email, password, coinBalance, phoneNumber } = req.body;
 
         const userExists = await User.findOne({ email });
         if (userExists) {
@@ -47,6 +48,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
             name,
             email,
             password: hashedPassword,
+            phoneNumber,
             coinBalance: coinBalance || 0,
             role: 'user',
             status: 'active',
