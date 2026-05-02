@@ -22,6 +22,11 @@ export const buyProduct = async (req: AuthRequest, res: Response): Promise<void>
             return;
         }
 
+        if (product.status === 'blocked') {
+            res.status(400).json({ message: 'Product is currently unavailable' });
+            return;
+        }
+
         const variantIndex = product.variants.findIndex(
             v => v.color === variantColor && v.sizeOrName === variantSizeOrName
         );

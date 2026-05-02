@@ -12,6 +12,7 @@ export interface IProduct extends Document {
     images: string[];
     priceInCoins: number;
     variants: IVariant[];
+    status: 'active' | 'blocked';
 }
 
 const VariantSchema: Schema = new Schema({
@@ -26,6 +27,7 @@ const ProductSchema: Schema = new Schema({
     images: [{ type: String }],
     priceInCoins: { type: Number, required: true },
     variants: [VariantSchema],
+    status: { type: String, enum: ['active', 'blocked'], default: 'active' },
 }, { timestamps: true });
 
 export default mongoose.model<IProduct>('Product', ProductSchema);

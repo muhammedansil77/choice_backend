@@ -3,7 +3,8 @@ import Product from '../models/Product';
 
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
     try {
-        const products = await Product.find({});
+        const filter = req.query.all === 'true' ? {} : { status: 'active' };
+        const products = await Product.find(filter);
         res.json(products);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -74,6 +75,36 @@ export const deleteProduct = async (req: Request, res: Response): Promise<void> 
         if (product) {
             await product.deleteOne();
             res.json({ message: 'Product removed' });
+        } else {
+            res.status(404).json({ message: 'Product not found' });
+        }
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const blockProduct = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (product) {
+            product.status = 'blocked';
+            await product.save();
+            res.json({ message: 'Product blocked', product });
+        } else {
+            res.status(404).json({ message: 'Product not found' });
+        }
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const unblockProduct = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (product) {
+            product.status = 'active';
+            await product.save();
+            res.json({ message: 'Product unblocked', product });
         } else {
             res.status(404).json({ message: 'Product not found' });
         }
