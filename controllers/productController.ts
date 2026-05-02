@@ -3,8 +3,8 @@ import Product from '../models/Product';
 
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
     try {
-        const filter = req.query.all === 'true' ? {} : { status: 'active' };
-        const products = await Product.find(filter);
+        const filter = req.query.all === 'true' ? {} : { status: 'available' };
+        const products = await Product.find(filter).sort('-createdAt');
         res.json(products);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -26,15 +26,17 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
 
 export const createProduct = async (req: Request, res: Response): Promise<void> => {
     try {
-        const productData = { ...req.body };
+        const { name, description, priceInCoins, category, stock, images } = req.body;
         
-        // Handle Cloudinary Uploaded Files
-        if (req.files && Array.isArray(req.files)) {
-            const imageUrls = req.files.map((file: any) => file.path);
-            productData.images = imageUrls;
-        }
+        const product = new Product({
+            name,
+            description,
+            priceInCoins,
+            category,
+            stock: stock || 0,
+            images: images || []
+        });
 
-        const product = new Product(productData);
         const createdProduct = await product.save();
         res.status(201).json(createdProduct);
     } catch (error: any) {
@@ -49,15 +51,9 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
             product.name = req.body.name || product.name;
             product.description = req.body.description || product.description;
             product.priceInCoins = req.body.priceInCoins || product.priceInCoins;
-            product.variants = req.body.variants || product.variants;
-
-            // Handle Cloudinary Uploaded Files for updates
-            if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-                const imageUrls = req.files.map((file: any) => file.path);
-                product.images = imageUrls;
-            } else {
-                product.images = req.body.images || product.images;
-            }
+            product.category = req.body.category || product.category;
+            product.stock = req.body.stock !== undefined ? req.body.stock : product.stock;
+            product.images = req.body.images || product.images;
 
             const updatedProduct = await product.save();
             res.json(updatedProduct);
@@ -102,7 +98,7 @@ export const unblockProduct = async (req: Request, res: Response): Promise<void>
     try {
         const product = await Product.findById(req.params.id);
         if (product) {
-            product.status = 'active';
+            product.status = 'available';
             await product.save();
             res.json({ message: 'Product unblocked', product });
         } else {

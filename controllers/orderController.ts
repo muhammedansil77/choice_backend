@@ -7,7 +7,7 @@ import { AuthRequest } from '../middlewares/authMiddleware';
 
 export const buyProduct = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const { productId, variantColor, variantSizeOrName, quantity = 1 } = req.body;
+        const { productId, quantity = 1 } = req.body;
         const qty = Number(quantity);
 
         if (!req.user) {
@@ -28,18 +28,7 @@ export const buyProduct = async (req: AuthRequest, res: Response): Promise<void>
             return;
         }
 
-        const variantIndex = product.variants.findIndex(
-            v => v.color === variantColor && v.sizeOrName === variantSizeOrName
-        );
-
-        if (variantIndex === -1) {
-            res.status(404).json({ message: 'Variant not found' });
-            return;
-        }
-
-        const variant = product.variants[variantIndex];
-
-        if (variant.stock < qty) {
+        if (product.stock < qty) {
             res.status(400).json({ message: 'Insufficient stock' });
             return;
         }
@@ -54,16 +43,12 @@ export const buyProduct = async (req: AuthRequest, res: Response): Promise<void>
         user.coinBalance -= totalCoins;
         await user.save();
 
-        product.variants[variantIndex].stock -= qty;
+        product.stock -= qty;
         await product.save();
 
         const order = await Order.create({
             user: user._id,
             product: product._id,
-            variant: {
-                color: variant.color,
-                sizeOrName: variant.sizeOrName
-            },
             coinsSpent: totalCoins,
             quantity: qty
         });
@@ -72,7 +57,7 @@ export const buyProduct = async (req: AuthRequest, res: Response): Promise<void>
             user: user._id,
             amount: totalCoins,
             type: 'purchase',
-            description: `Purchased ${qty}x ${product.name} (${variant.color}, ${variant.sizeOrName})`
+            description: `Purchased ${qty}x ${product.name}`
         });
 
         res.status(201).json({ message: 'Purchase Request sent for admin approval', order });
@@ -153,11 +138,8 @@ export const rejectOrder = async (req: Request, res: Response): Promise<void> =>
         // Refund stock
         const product = await Product.findById(order.product);
         if (product) {
-            const variantIndex = product.variants.findIndex(v => v.color === order.variant.color && v.sizeOrName === order.variant.sizeOrName);
-            if (variantIndex !== -1) {
-                product.variants[variantIndex].stock += order.quantity;
-                await product.save();
-            }
+            product.stock += order.quantity;
+            await product.save();
         }
         
         res.json({ message: 'Order rejected and coins/stock refunded', order });
