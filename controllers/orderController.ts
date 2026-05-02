@@ -88,7 +88,9 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
-        const orders = await Order.find({ user: req.user._id }).populate('product', 'name images');
+        const orders = await Order.find({ user: req.user._id })
+            .populate('product', 'name images')
+            .sort('-createdAt');
         res.json(orders);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
