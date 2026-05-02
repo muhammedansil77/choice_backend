@@ -108,7 +108,10 @@ export const getAllOrders = async (req: Request, res: Response): Promise<void> =
 
 export const getPendingOrders = async (req: Request, res: Response): Promise<void> => {
     try {
-        const orders = await Order.find({ status: 'pending' }).populate('user', 'name email').populate('product', 'name images').sort('createdAt');
+        const orders = await Order.find({ status: 'pending' })
+            .populate('user', 'name email phoneNumber')
+            .populate('product', 'name images')
+            .sort('createdAt');
         res.json(orders);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
