@@ -81,3 +81,36 @@ export const getMyWallet = async (req: AuthRequest, res: Response): Promise<void
         res.status(500).json({ message: error.message });
     }
 };
+
+export const distributeCoins = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { amount } = req.body;
+        if (!amount || amount <= 0) {
+            res.status(400).json({ message: 'Invalid amount' });
+            return;
+        }
+
+        // Update all users
+        const result = await User.updateMany({}, { $inc: { coinBalance: amount } });
+
+        // Create transactions for all users (This might be heavy for many users, 
+        // but let's do it for consistency with the existing system)
+        const users = await User.find({}, '_id');
+        const transactions = users.map(user => ({
+            user: user._id,
+            amount,
+            type: 'added',
+            description: `Global distribution of ${amount} coins by admin`,
+        }));
+        
+        await Transaction.insertMany(transactions);
+
+        res.json({ 
+            message: `Coins distributed successfully to ${result.modifiedCount} users`,
+            distributedAmount: amount,
+            count: result.modifiedCount
+        });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};

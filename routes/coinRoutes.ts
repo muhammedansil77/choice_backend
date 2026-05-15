@@ -1,5 +1,5 @@
 import express from 'express';
-import { addCoins, deductCoins, getAllTransactions, getMyWallet } from '../controllers/coinController';
+import { addCoins, deductCoins, getAllTransactions, getMyWallet, distributeCoins } from '../controllers/coinController';
 import { protect, admin } from '../middlewares/authMiddleware';
 
 const router = express.Router();
@@ -7,6 +7,7 @@ const router = express.Router();
 router.post('/add', protect, admin, addCoins);
 router.post('/deduct', protect, admin, deductCoins);
 router.get('/transactions', protect, admin, getAllTransactions);
+router.post('/distribute', protect, admin, distributeCoins);
 router.get('/mywallet', protect, getMyWallet);
 
 export default router;
