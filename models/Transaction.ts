@@ -1,17 +1,24 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ITransaction extends Document {
-    user: mongoose.Types.ObjectId;
+    senderId: mongoose.Types.ObjectId | string;
+    receiverId: mongoose.Types.ObjectId | string;
     amount: number;
-    type: 'added' | 'deducted' | 'purchase';
-    description: string;
+    transactionType: 'mint' | 'distribution' | 'purchase' | 'reclaim';
+    note: string;
+    createdAt: Date;
 }
 
 const TransactionSchema: Schema = new Schema({
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    senderId: { type: Schema.Types.Mixed, required: true }, // Can be 'ADMIN' or User ID
+    receiverId: { type: Schema.Types.Mixed, required: true }, // Can be 'ADMIN' or User ID
     amount: { type: Number, required: true },
-    type: { type: String, enum: ['credit', 'debit', 'purchase', 'added', 'deducted'], required: true },
-    description: { type: String, required: true },
+    transactionType: { 
+        type: String, 
+        enum: ['mint', 'distribution', 'purchase', 'reclaim'], 
+        required: true 
+    },
+    note: { type: String },
 }, { timestamps: true });
 
 export default mongoose.model<ITransaction>('Transaction', TransactionSchema);

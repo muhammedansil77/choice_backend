@@ -1,114 +1,188 @@
 import { Request, Response } from 'express';
 import User from '../models/User';
 import Transaction from '../models/Transaction';
-import { AuthRequest } from '../middlewares/authMiddleware';
+import AdminWallet from '../models/AdminWallet';
 
+// 1. Get Admin Wallet Stats
+export const getAdminStats = async (req: Request, res: Response): Promise<void> => {
+    try {
+        let wallet = await AdminWallet.findOne();
+        if (!wallet) {
+            wallet = await AdminWallet.create({ totalCoins: 0, distributedCoins: 0, remainingCoins: 0 });
+        }
+        res.json(wallet);
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// 2. Admin Mints Coins (Create new supply)
+export const mintCoins = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { amount, note } = req.body;
+        if (!amount || amount <= 0) {
+            res.status(400).json({ message: 'Invalid amount' });
+            return;
+        }
+
+        let wallet = await AdminWallet.findOne();
+        if (!wallet) {
+            wallet = new AdminWallet();
+        }
+
+        wallet.totalCoins += amount;
+        wallet.remainingCoins = wallet.totalCoins - wallet.distributedCoins;
+        await wallet.save();
+
+        await Transaction.create({
+            senderId: 'SYSTEM',
+            receiverId: 'ADMIN',
+            amount,
+            transactionType: 'mint',
+            note: note || `Minted ${amount} coins into central supply`
+        });
+
+        res.json({ message: 'Coins minted successfully', wallet });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// 3. Admin Distributes Coins to specific user
 export const addCoins = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { userId, amount } = req.body;
+        const { userId, amount, note } = req.body;
         const user = await User.findById(userId);
 
-        if (user) {
-            user.coinBalance += amount;
-            await user.save();
-
-            await Transaction.create({
-                user: userId,
-                amount,
-                type: 'added',
-                description: `Added ${amount} coins by admin`,
-            });
-
-            res.json({ message: 'Coins added successfully', coinBalance: user.coinBalance });
-        } else {
+        if (!user) {
             res.status(404).json({ message: 'User not found' });
+            return;
         }
+
+        const wallet = await AdminWallet.findOne();
+        if (!wallet || wallet.remainingCoins < amount) {
+            res.status(400).json({ message: 'Insufficient admin supply to distribute coins' });
+            return;
+        }
+
+        // Transactional update
+        user.coinBalance += amount;
+        await user.save();
+
+        wallet.distributedCoins += amount;
+        wallet.remainingCoins = wallet.totalCoins - wallet.distributedCoins;
+        await wallet.save();
+
+        await Transaction.create({
+            senderId: 'ADMIN',
+            receiverId: userId,
+            amount,
+            transactionType: 'distribution',
+            note: note || `Distributed ${amount} coins to ${user.name}`
+        });
+
+        res.json({ message: 'Coins distributed successfully', userBalance: user.coinBalance, wallet });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
 };
 
-export const deductCoins = async (req: Request, res: Response): Promise<void> => {
+// 4. Admin Distributes Coins to ALL users (Bulk)
+export const distributeCoins = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { userId, amount } = req.body;
-        const user = await User.findById(userId);
+        const { amount, note } = req.body;
+        const userCount = await User.countDocuments({ role: 'user' });
+        const totalNeeded = amount * userCount;
 
-        if (user) {
-            if (user.coinBalance < amount) {
-                res.status(400).json({ message: 'Insufficient coin balance to deduct' });
-                return;
-            }
-            user.coinBalance -= amount;
-            await user.save();
-
-            await Transaction.create({
-                user: userId,
-                amount,
-                type: 'deducted',
-                description: `Deducted ${amount} coins by admin`,
+        const wallet = await AdminWallet.findOne();
+        if (!wallet || wallet.remainingCoins < totalNeeded) {
+            res.status(400).json({ 
+                message: `Insufficient supply. Need ${totalNeeded} but only ${wallet?.remainingCoins || 0} available.` 
             });
-
-            res.json({ message: 'Coins deducted successfully', coinBalance: user.coinBalance });
-        } else {
-            res.status(404).json({ message: 'User not found' });
+            return;
         }
+
+        // Update all users
+        await User.updateMany({ role: 'user' }, { $inc: { coinBalance: amount } });
+
+        // Update admin wallet
+        wallet.distributedCoins += totalNeeded;
+        wallet.remainingCoins = wallet.totalCoins - wallet.distributedCoins;
+        await wallet.save();
+
+        // Log transaction for each user
+        const users = await User.find({ role: 'user' }, '_id');
+        const logs = users.map(u => ({
+            senderId: 'ADMIN',
+            receiverId: u._id,
+            amount,
+            transactionType: 'distribution',
+            note: note || `Bulk distribution of ${amount} coins`
+        }));
+        await Transaction.insertMany(logs);
+
+        res.json({ message: 'Bulk distribution successful', distributedTotal: totalNeeded, wallet });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
 };
 
+// 5. Admin Reclaims Coins from user
+export const reclaimCoins = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { userId, amount, note } = req.body;
+        const user = await User.findById(userId);
+
+        if (!user || user.coinBalance < amount) {
+            res.status(400).json({ message: 'Insufficient user balance' });
+            return;
+        }
+
+        user.coinBalance -= amount;
+        await user.save();
+
+        const wallet = await AdminWallet.findOne();
+        if (wallet) {
+            wallet.distributedCoins -= amount;
+            wallet.remainingCoins = wallet.totalCoins - wallet.distributedCoins;
+            await wallet.save();
+        }
+
+        await Transaction.create({
+            senderId: userId,
+            receiverId: 'ADMIN',
+            amount,
+            transactionType: 'reclaim',
+            note: note || `Reclaimed ${amount} coins from ${user.name}`
+        });
+
+        res.json({ message: 'Coins reclaimed successfully', userBalance: user.coinBalance, wallet });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// 6. Get All Transactions
 export const getAllTransactions = async (req: Request, res: Response): Promise<void> => {
     try {
-        const transactions = await Transaction.find().populate('user', 'name email').sort('-createdAt');
+        const transactions = await Transaction.find().sort('-createdAt');
         res.json(transactions);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
 };
 
-export const getMyWallet = async (req: AuthRequest, res: Response): Promise<void> => {
+// 7. Get User Wallet
+export const getMyWallet = async (req: any, res: Response): Promise<void> => {
     try {
-        if (!req.user) {
-            res.status(401).json({ message: 'Not authorized' });
-            return;
-        }
-        const transactions = await Transaction.find({ user: req.user._id }).sort('-createdAt');
-        res.json({
-            coinBalance: req.user.coinBalance,
-            transactions,
-        });
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-export const distributeCoins = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { amount } = req.body;
-        if (!amount || amount <= 0) {
-            res.status(400).json({ message: 'Invalid amount' });
-            return;
-        }
-
-        // Update all users
-        const result = await User.updateMany({}, { $inc: { coinBalance: amount } });
-
-        // Create transactions for all users (This might be heavy for many users, 
-        // but let's do it for consistency with the existing system)
-        const users = await User.find({}, '_id');
-        const transactions = users.map(user => ({
-            user: user._id,
-            amount,
-            type: 'added',
-            description: `Global distribution of ${amount} coins by admin`,
-        }));
+        const user = await User.findById(req.user._id);
+        const transactions = await Transaction.find({ 
+            $or: [{ senderId: req.user._id }, { receiverId: req.user._id }] 
+        }).sort('-createdAt');
         
-        await Transaction.insertMany(transactions);
-
-        res.json({ 
-            message: `Coins distributed successfully to ${result.modifiedCount} users`,
-            distributedAmount: amount,
-            count: result.modifiedCount
+        res.json({
+            coinBalance: user?.coinBalance || 0,
+            transactions
         });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
