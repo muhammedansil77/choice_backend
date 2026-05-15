@@ -129,3 +129,31 @@ export const addCoins = async (req: Request, res: Response): Promise<void> => {
         res.status(500).json({ message: error.message });
     }
 };
+
+export const getDashboardSummary = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const userCount = await User.countDocuments({ role: 'user' });
+        const adminCount = await User.countDocuments({ role: 'admin' });
+        
+        // Use dynamic imports or models if needed, but assuming they are available
+        const Product = (await import('../models/Product')).default;
+        const Transaction = (await import('../models/Transaction')).default;
+        
+        const productCount = await Product.countDocuments();
+        const transactions = await Transaction.find().sort('-createdAt').limit(5).populate('user', 'name');
+        
+        const totalCoins = await User.aggregate([
+            { $group: { _id: null, total: { $sum: "$coinBalance" } } }
+        ]);
+
+        res.json({
+            users: userCount,
+            admins: adminCount,
+            products: productCount,
+            totalCoins: totalCoins[0]?.total || 0,
+            recentActivity: transactions
+        });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
