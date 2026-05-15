@@ -54,10 +54,11 @@ export const buyProduct = async (req: AuthRequest, res: Response): Promise<void>
         });
 
         await Transaction.create({
-            user: user._id,
+            senderId: user._id,
+            receiverId: 'SYSTEM_STORE',
             amount: totalCoins,
-            type: 'purchase',
-            description: `Purchased ${qty}x ${product.name}`
+            transactionType: 'purchase',
+            note: `Purchased ${qty}x ${product.name}`
         });
 
         res.status(201).json({ message: 'Purchase Request sent for admin approval', order });
@@ -133,6 +134,15 @@ export const rejectOrder = async (req: Request, res: Response): Promise<void> =>
         if (user) {
             user.coinBalance += order.coinsSpent;
             await user.save();
+            
+            // Log refund transaction
+            await Transaction.create({
+                senderId: 'SYSTEM_STORE',
+                receiverId: user._id,
+                amount: order.coinsSpent,
+                transactionType: 'reclaim',
+                note: `Refund for rejected order #${order._id}`
+            });
         }
         
         // Refund stock

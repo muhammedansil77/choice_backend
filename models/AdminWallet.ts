@@ -14,9 +14,8 @@ const AdminWalletSchema: Schema = new Schema({
 }, { timestamps: true });
 
 // Pre-save hook to ensure remainingCoins is always calculated
-AdminWalletSchema.pre('save', function(next) {
+AdminWalletSchema.pre<IAdminWallet>('save', function() {
     this.remainingCoins = this.totalCoins - this.distributedCoins;
-    next();
 });
 
 export default mongoose.model<IAdminWallet>('AdminWallet', AdminWalletSchema);

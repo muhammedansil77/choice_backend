@@ -28,3 +28,17 @@ export const deleteCategory = async (req: Request, res: Response): Promise<void>
     res.status(500).json({ message: error.message });
   }
 };
+
+export const updateCategory = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, icon } = req.body;
+    const category = await Category.findByIdAndUpdate(
+      req.params.id, 
+      { name, icon }, 
+      { new: true }
+    );
+    res.json(category);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};

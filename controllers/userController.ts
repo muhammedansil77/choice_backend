@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import User from '../models/User';
 import Transaction from '../models/Transaction';
+import AdminWallet from '../models/AdminWallet';
 
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -102,29 +103,41 @@ export const unblockUser = async (req: Request, res: Response): Promise<void> =>
 
 export const addCoins = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { amount } = req.body;
+        const { amount, note } = req.body;
         if (!amount || amount <= 0) {
             res.status(400).json({ message: 'Invalid coin amount' });
             return;
         }
         
         const user = await User.findById(req.params.id);
-        if (user) {
-            user.coinBalance = (user.coinBalance || 0) + Number(amount);
-            await user.save();
-
-            // Create transaction for history
-            await Transaction.create({
-                user: user._id,
-                amount: Number(amount),
-                type: 'credit',
-                description: 'Coins added by Admin'
-            });
-
-            res.json({ message: 'Coins added successfully', user });
-        } else {
+        if (!user) {
             res.status(404).json({ message: 'User not found' });
+            return;
         }
+
+        const wallet = await AdminWallet.findOne();
+        if (!wallet || wallet.remainingCoins < amount) {
+            res.status(400).json({ message: 'Insufficient admin supply' });
+            return;
+        }
+
+        user.coinBalance = (user.coinBalance || 0) + Number(amount);
+        await user.save();
+
+        wallet.distributedCoins += Number(amount);
+        wallet.remainingCoins = wallet.totalCoins - wallet.distributedCoins;
+        await wallet.save();
+
+        // Create transaction for history
+        await Transaction.create({
+            senderId: 'ADMIN',
+            receiverId: user._id,
+            amount: Number(amount),
+            transactionType: 'distribution',
+            note: note || 'Coins added by Admin'
+        });
+
+        res.json({ message: 'Coins added successfully', user, wallet });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
@@ -135,22 +148,20 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
         const userCount = await User.countDocuments({ role: 'user' });
         const adminCount = await User.countDocuments({ role: 'admin' });
         
-        // Use dynamic imports or models if needed, but assuming they are available
         const Product = (await import('../models/Product')).default;
-        const Transaction = (await import('../models/Transaction')).default;
         
         const productCount = await Product.countDocuments();
-        const transactions = await Transaction.find().sort('-createdAt').limit(5).populate('user', 'name');
+        const transactions = await Transaction.find().sort('-createdAt').limit(5);
         
-        const totalCoins = await User.aggregate([
-            { $group: { _id: null, total: { $sum: "$coinBalance" } } }
-        ]);
+        const wallet = await AdminWallet.findOne();
 
         res.json({
             users: userCount,
             admins: adminCount,
             products: productCount,
-            totalCoins: totalCoins[0]?.total || 0,
+            totalCoins: wallet?.totalCoins || 0,
+            remainingCoins: wallet?.remainingCoins || 0,
+            distributedCoins: wallet?.distributedCoins || 0,
             recentActivity: transactions
         });
     } catch (error: any) {
