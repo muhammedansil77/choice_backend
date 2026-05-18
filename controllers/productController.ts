@@ -26,15 +26,22 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
 
 export const createProduct = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { name, description, priceInCoins, category, stock, images } = req.body;
+        const { name, description, priceInCoins, category, stock } = req.body;
         
+        let imagesList: string[] = [];
+        if (req.files && Array.isArray(req.files)) {
+            imagesList = (req.files as any[]).map(file => file.path);
+        } else if (req.body.images) {
+            imagesList = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+        }
+
         const product = new Product({
             name,
             description,
             priceInCoins,
             category,
             stock: stock || 0,
-            images: images || []
+            images: imagesList
         });
 
         const createdProduct = await product.save();
@@ -53,7 +60,12 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
             product.priceInCoins = req.body.priceInCoins || product.priceInCoins;
             product.category = req.body.category || product.category;
             product.stock = req.body.stock !== undefined ? req.body.stock : product.stock;
-            product.images = req.body.images || product.images;
+            
+            if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+                product.images = (req.files as any[]).map(file => file.path);
+            } else if (req.body.images) {
+                product.images = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+            }
 
             const updatedProduct = await product.save();
             res.json(updatedProduct);
