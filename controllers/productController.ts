@@ -1,5 +1,40 @@
 import { Request, Response } from 'express';
+import { v2 as cloudinary } from 'cloudinary';
+import dotenv from 'dotenv';
 import Product from '../models/Product';
+
+dotenv.config();
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Helper to upload a buffer to Cloudinary, falling back to base64 on failure
+const uploadImage = async (file: any): Promise<string> => {
+  return new Promise((resolve) => {
+    if (!file || !file.buffer) {
+      resolve('');
+      return;
+    }
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'aoppp_products',
+      },
+      (error, result) => {
+        if (error || !result) {
+          console.warn('Cloudinary upload failed, falling back to Base64:', error);
+          const base64Image = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+          resolve(base64Image);
+        } else {
+          resolve(result.secure_url);
+        }
+      }
+    );
+    uploadStream.end(file.buffer);
+  });
+};
 
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -30,7 +65,7 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
         
         let imagesList: string[] = [];
         if (req.files && Array.isArray(req.files)) {
-            imagesList = (req.files as any[]).map(file => file.path);
+            imagesList = await Promise.all((req.files as any[]).map(file => uploadImage(file)));
         } else if (req.body.images) {
             imagesList = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
         }
@@ -62,7 +97,7 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
             product.stock = req.body.stock !== undefined ? req.body.stock : product.stock;
             
             if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-                product.images = (req.files as any[]).map(file => file.path);
+                product.images = await Promise.all((req.files as any[]).map(file => uploadImage(file)));
             } else if (req.body.images) {
                 product.images = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
             }
