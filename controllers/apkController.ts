@@ -29,21 +29,32 @@ export const downloadLatestApkFile = async (req: Request, res: Response): Promis
       latest = await ApkRelease.findOne().sort({ createdAt: -1 });
     }
 
-    if (!latest || !fs.existsSync(latest.filePath)) {
-      res.status(404).send('APK file not found on server');
+    if (!latest) {
+      res.status(404).send('APK release record not found');
+      return;
+    }
+
+    // Resolve path safely across Windows & Linux VPS
+    let apkFilePath = latest.filePath;
+    if (!fs.existsSync(apkFilePath)) {
+      apkFilePath = path.join(__dirname, '../../uploads/apks', latest.fileName);
+    }
+
+    if (!fs.existsSync(apkFilePath)) {
+      res.status(404).send('APK file not found on server storage');
       return;
     }
 
     // Increment download metrics
-    latest.downloadsCount += 1;
+    latest.downloadsCount = (latest.downloadsCount || 0) + 1;
     await latest.save();
 
     const downloadFileName = `CHOICE-Electricals-POS-${latest.versionName}.apk`;
     
     res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-    res.download(latest.filePath, downloadFileName);
+    res.download(apkFilePath, downloadFileName);
   } catch (error: any) {
-    res.status(500).send('Error processing APK download');
+    res.status(500).send('Error processing APK download: ' + (error.message || error));
   }
 };
 
@@ -116,9 +127,14 @@ export const deleteApkRelease = async (req: Request, res: Response): Promise<voi
     }
 
     // Delete file from disk if exists
-    if (fs.existsSync(release.filePath)) {
+    let targetPath = release.filePath;
+    if (!fs.existsSync(targetPath)) {
+      targetPath = path.join(__dirname, '../../uploads/apks', release.fileName);
+    }
+
+    if (fs.existsSync(targetPath)) {
       try {
-        fs.unlinkSync(release.filePath);
+        fs.unlinkSync(targetPath);
       } catch (err) {
         console.error('Error deleting APK file:', err);
       }
