@@ -30,18 +30,25 @@ export const downloadLatestApkFile = async (req: Request, res: Response): Promis
     }
 
     if (!latest) {
-      res.status(404).send('APK release record not found');
+      res.status(404).send('APK release record not found in database. Please upload an APK via /admin/apk');
       return;
     }
 
-    // Resolve path safely across Windows & Linux VPS
-    let apkFilePath = latest.filePath;
-    if (!fs.existsSync(apkFilePath)) {
-      apkFilePath = path.join(__dirname, '../../uploads/apks', latest.fileName);
-    }
+    // Resolve path safely across Windows & Linux VPS environments
+    const possiblePaths = [
+      latest.filePath,
+      path.join(process.cwd(), 'uploads/apks', latest.fileName),
+      path.join(process.cwd(), 'backend/uploads/apks', latest.fileName),
+      path.join(__dirname, '../../uploads/apks', latest.fileName),
+      path.join(__dirname, '../uploads/apks', latest.fileName),
+      path.join(__dirname, 'uploads/apks', latest.fileName),
+    ];
 
-    if (!fs.existsSync(apkFilePath)) {
-      res.status(404).send('APK file not found on server storage');
+    const validPath = possiblePaths.find(p => p && fs.existsSync(p));
+
+    if (!validPath) {
+      console.error('APK file missing on VPS disk. Checked paths:', possiblePaths);
+      res.status(404).send('APK file not found on server storage. Please upload a new APK at https://api.anzil.online/admin/apk');
       return;
     }
 
@@ -52,7 +59,7 @@ export const downloadLatestApkFile = async (req: Request, res: Response): Promis
     const downloadFileName = `CHOICE-Electricals-POS-${latest.versionName}.apk`;
     
     res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-    res.download(apkFilePath, downloadFileName);
+    res.download(validPath, downloadFileName);
   } catch (error: any) {
     res.status(500).send('Error processing APK download: ' + (error.message || error));
   }
