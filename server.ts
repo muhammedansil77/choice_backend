@@ -8,6 +8,10 @@ import productRoutes from './routes/productRoutes';
 import coinRoutes from './routes/coinRoutes';
 import orderRoutes from './routes/orderRoutes';
 import categoryRoutes from './routes/categoryRoutes';
+import apkRoutes from './routes/apkRoutes';
+import { getDownloadPageHtml } from './views/downloadPage';
+import { getAdminApkPageHtml } from './views/adminApkPage';
+import { downloadLatestApkFile } from './controllers/apkController';
 
 dotenv.config();
 connectDB();
@@ -18,12 +22,26 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// API ROUTES
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/coins', coinRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/apk', apkRoutes);
+
+// PUBLIC DOWNLOAD PAGE ROUTES
+app.get(['/download', '/download/choice-electricals'], (req, res) => {
+    res.send(getDownloadPageHtml());
+});
+
+app.get('/download/file', downloadLatestApkFile);
+
+// ADMIN APK MANAGEMENT ROUTE
+app.get('/admin/apk', (req, res) => {
+    res.send(getAdminApkPageHtml());
+});
 
 app.get('/', (req, res) => {
     res.send('API is running...');
@@ -116,7 +134,7 @@ app.get('/privacy-policy', (req, res) => {
         <p>We implement appropriate technical and organizational security measures to protect your data from unauthorized access, loss, or alteration. We retain your personal data only as long as necessary to provide our services and satisfy legal or billing requirements.</p>
 
         <h2>5. Your Rights and Deletion Requests</h2>
-        <p>You have the right to access, correct, or request the deletion of your personal data. If you wish to delete your account or any associated personal details, please contact us at <strong>support@choiceelectricals.com</strong>.</p>
+        <p>If you wish to delete your account or any associated personal details, please contact us at <strong>support@choiceelectricals.com</strong>.</p>
 
         <h2>6. Contact Us</h2>
         <p>If you have any questions or concerns regarding this Privacy Policy, please contact us:</p>
