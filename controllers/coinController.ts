@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../prisma';
+import { AuthRequest } from '../middlewares/authMiddleware';
 
 const formatTransaction = (t: any) => ({
   _id: t.id,
@@ -254,8 +255,12 @@ export const getAllTransactions = async (req: Request, res: Response): Promise<v
 };
 
 // 7. Get User Wallet
-export const getMyWallet = async (req: any, res: Response): Promise<void> => {
+export const getMyWallet = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    if (!req.user) {
+      res.status(401).json({ message: 'Not authorized' });
+      return;
+    }
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     const transactions = await prisma.transaction.findMany({
       where: {
