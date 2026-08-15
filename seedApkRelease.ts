@@ -1,15 +1,12 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import connectDB from './config/db';
-import ApkRelease from './models/ApkRelease';
+import prisma from './prisma';
 
 dotenv.config();
 
 const seedApk = async () => {
   try {
-    await connectDB();
-
     const flutterApkPath = path.join(__dirname, '../frontend_flutter/build/app/outputs/flutter-apk/app-release.apk');
     const uploadDir = path.join(__dirname, 'uploads/apks');
 
@@ -32,38 +29,43 @@ const seedApk = async () => {
     }
 
     // Mark previous releases as non-latest
-    await ApkRelease.updateMany({}, { isLatest: false });
+    await prisma.apkRelease.updateMany({ data: { isLatest: false } });
 
     // Upsert initial release
-    let release = await ApkRelease.findOne({ versionName: '1.0.0' });
+    let release = await prisma.apkRelease.findFirst({ where: { versionName: '1.0.0' } });
     if (!release) {
-      release = new ApkRelease({
-        appName: 'CHOICE Electricals POS',
-        versionName: '1.0.0',
-        versionCode: 6,
-        fileName: targetFileName,
-        originalFileName: 'CHOICE-Electricals-POS-v1.0.0.apk',
-        filePath: targetFilePath,
-        fileSize: fileSize,
-        releaseNotes: 'Official initial production release featuring complete POS management, Nodemailer OTP verification, 2026 UI redesign, and adaptive launcher branding.',
-        minimumAndroidVersion: 'Android 5.0 (Lollipop)+',
-        isLatest: true,
-        releaseDate: new Date(),
-        downloadsCount: 0,
+      release = await prisma.apkRelease.create({
+        data: {
+          appName: 'CHOICE Electricals POS',
+          versionName: '1.0.0',
+          versionCode: 6,
+          fileName: targetFileName,
+          originalFileName: 'CHOICE-Electricals-POS-v1.0.0.apk',
+          filePath: targetFilePath,
+          fileSize: fileSize,
+          releaseNotes: 'Official initial production release featuring complete POS management, Nodemailer OTP verification, 2026 UI redesign, and adaptive launcher branding.',
+          minimumAndroidVersion: 'Android 5.0 (Lollipop)+',
+          isLatest: true,
+          releaseDate: new Date(),
+          downloadsCount: 0,
+        },
       });
-      await release.save();
-      console.log('Seeded initial APK release v1.0.0 successfully!');
+      console.log('Seeded initial APK release v1.0.0 into MySQL successfully!');
     } else {
-      release.filePath = targetFilePath;
-      release.fileSize = fileSize;
-      release.isLatest = true;
-      await release.save();
-      console.log('Updated existing APK release v1.0.0!');
+      await prisma.apkRelease.update({
+        where: { id: release.id },
+        data: {
+          filePath: targetFilePath,
+          fileSize: fileSize,
+          isLatest: true,
+        },
+      });
+      console.log('Updated existing APK release v1.0.0 in MySQL!');
     }
 
     process.exit(0);
   } catch (error) {
-    console.error('Error seeding APK release:', error);
+    console.error('Error seeding APK release into MySQL:', error);
     process.exit(1);
   }
 };

@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import User, { IUser } from '../models/User';
+import prisma from '../prisma';
+import { User } from '@prisma/client';
 
 export interface AuthRequest extends Request {
-    user?: IUser;
+    user?: User;
 }
 
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
@@ -13,7 +14,10 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
             token = req.headers.authorization.split(' ')[1];
             const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'secret');
 
-            const user = await User.findById(decoded.id).select('-password');
+            const user = await prisma.user.findUnique({
+                where: { id: decoded.id },
+            });
+
             if (!user) {
                 res.status(401).json({ message: 'Not authorized, user not found' });
                 return;

@@ -1,12 +1,11 @@
-import mongoose from 'mongoose';
+import prisma from '../prisma';
 
 const connectDB = async () => {
     try {
-        const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/aoppp_mobile_app');
-        console.log(`MongoDB Connected: ${conn.connection.host}`);
+        await prisma.$connect();
+        console.log('MySQL Database Connected successfully via Prisma ORM!');
     } catch (error: any) {
-        console.error(`Error: ${error.message}`);
-        process.exit(1);
+        console.error(`Database Connection Error: ${error.message}`);
     }
 };
 

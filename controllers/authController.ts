@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import User from '../models/User';
-import Otp from '../models/Otp';
+import prisma from '../prisma';
 import { sendOtpEmail } from '../services/emailService';
 
 const generateToken = (id: string, role: string) => {
@@ -15,7 +14,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     try {
         const { email, password } = req.body;
 
-        const user = await User.findOne({ email });
+        const user = await prisma.user.findUnique({ where: { email } });
 
         if (user && (await bcrypt.compare(password, user.password || ''))) {
             if (user.status === 'blocked') {
@@ -23,12 +22,13 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
                 return;
             }
             res.json({
-                _id: user._id,
+                _id: user.id,
+                id: user.id,
                 name: user.name,
                 email: user.email,
                 role: user.role,
                 coinBalance: user.coinBalance,
-                token: generateToken(user._id.toString(), user.role),
+                token: generateToken(user.id, user.role),
             });
         } else {
             res.status(401).json({ message: 'Invalid email or password' });
@@ -47,7 +47,7 @@ export const sendRegisterOtp = async (req: Request, res: Response): Promise<void
             return;
         }
 
-        const existingUser = await User.findOne({ email });
+        const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
             res.status(400).json({ message: 'User with this email already exists' });
             return;
@@ -57,12 +57,15 @@ export const sendRegisterOtp = async (req: Request, res: Response): Promise<void
         const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
         // Delete any existing OTPs for this email
-        await Otp.deleteMany({ email });
+        await prisma.otp.deleteMany({ where: { email } });
 
-        // Save new OTP
-        await Otp.create({
-            email,
-            otp: generatedOtp,
+        // Save new OTP with 10-minute expiry
+        await prisma.otp.create({
+            data: {
+                email,
+                otp: generatedOtp,
+                expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            },
         });
 
         // Send OTP email via Nodemailer
@@ -90,14 +93,21 @@ export const registerWithOtp = async (req: Request, res: Response): Promise<void
             return;
         }
 
-        const existingUser = await User.findOne({ email });
+        const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
             res.status(400).json({ message: 'User already exists' });
             return;
         }
 
         // Verify OTP
-        const otpRecord = await Otp.findOne({ email, otp });
+        const otpRecord = await prisma.otp.findFirst({
+            where: {
+                email,
+                otp,
+                expiresAt: { gte: new Date() },
+            },
+        });
+
         if (!otpRecord) {
             res.status(400).json({ message: 'Invalid or expired OTP code' });
             return;
@@ -108,26 +118,29 @@ export const registerWithOtp = async (req: Request, res: Response): Promise<void
         const hashedPassword = await bcrypt.hash(password, salt);
 
         // Create User
-        const user = await User.create({
-            name,
-            email,
-            password: hashedPassword,
-            phoneNumber: phoneNumber || '',
-            coinBalance: 0,
-            role: 'user',
-            status: 'active',
+        const user = await prisma.user.create({
+            data: {
+                name,
+                email,
+                password: hashedPassword,
+                phoneNumber: phoneNumber || '',
+                coinBalance: 0,
+                role: 'user',
+                status: 'active',
+            },
         });
 
         // Delete used OTP
-        await Otp.deleteMany({ email });
+        await prisma.otp.deleteMany({ where: { email } });
 
         res.status(201).json({
-            _id: user._id,
+            _id: user.id,
+            id: user.id,
             name: user.name,
             email: user.email,
             role: user.role,
             coinBalance: user.coinBalance,
-            token: generateToken(user._id.toString(), user.role),
+            token: generateToken(user.id, user.role),
         });
     } catch (error: any) {
         res.status(500).json({ message: error.message });

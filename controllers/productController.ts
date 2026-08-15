@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { v2 as cloudinary } from 'cloudinary';
 import dotenv from 'dotenv';
-import Product from '../models/Product';
+import prisma from '../prisma';
 
 dotenv.config();
 
@@ -36,122 +36,157 @@ const uploadImage = async (file: any): Promise<string> => {
   });
 };
 
+const formatProduct = (p: any) => ({
+  _id: p.id,
+  id: p.id,
+  name: p.name,
+  description: p.description,
+  priceInCoins: p.priceInCoins,
+  category: p.category,
+  images: Array.isArray(p.images) ? p.images : (typeof p.images === 'string' ? JSON.parse(p.images) : []),
+  stock: p.stock,
+  status: p.status,
+  createdAt: p.createdAt,
+  updatedAt: p.updatedAt,
+});
+
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const filter = req.query.all === 'true' ? {} : { status: 'available' };
-        const products = await Product.find(filter).sort('-createdAt');
-        res.json(products);
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    const whereCondition = req.query.all === 'true' ? {} : { status: 'available' as const };
+    const products = await prisma.product.findMany({
+      where: whereCondition,
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(products.map(formatProduct));
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const getProductById = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (product) {
-            res.json(product);
-        } else {
-            res.status(404).json({ message: 'Product not found' });
-        }
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
+  try {
+    const id = req.params.id as string;
+    const product = await prisma.product.findUnique({
+      where: { id },
+    });
+    if (product) {
+      res.json(formatProduct(product));
+    } else {
+      res.status(404).json({ message: 'Product not found' });
     }
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const createProduct = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { name, description, priceInCoins, category, stock } = req.body;
-        
-        let imagesList: string[] = [];
-        if (req.files && Array.isArray(req.files)) {
-            imagesList = await Promise.all((req.files as any[]).map(file => uploadImage(file)));
-        } else if (req.body.images) {
-            imagesList = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
-        }
+  try {
+    const { name, description, priceInCoins, category, stock } = req.body;
 
-        const product = new Product({
-            name,
-            description,
-            priceInCoins,
-            category,
-            stock: stock || 0,
-            images: imagesList
-        });
-
-        const createdProduct = await product.save();
-        res.status(201).json(createdProduct);
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
+    let imagesList: string[] = [];
+    if (req.files && Array.isArray(req.files)) {
+      imagesList = await Promise.all((req.files as any[]).map((file) => uploadImage(file)));
+    } else if (req.body.images) {
+      imagesList = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
     }
+
+    const product = await prisma.product.create({
+      data: {
+        name,
+        description: description || '',
+        priceInCoins: parseFloat(priceInCoins) || 0,
+        category: category || 'General',
+        stock: stock ? parseInt(stock, 10) : 0,
+        images: imagesList,
+        status: 'available',
+      },
+    });
+
+    res.status(201).json(formatProduct(product));
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const updateProduct = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (product) {
-            product.name = req.body.name || product.name;
-            product.description = req.body.description || product.description;
-            product.priceInCoins = req.body.priceInCoins || product.priceInCoins;
-            product.category = req.body.category || product.category;
-            product.stock = req.body.stock !== undefined ? req.body.stock : product.stock;
-            
-            if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-                product.images = await Promise.all((req.files as any[]).map(file => uploadImage(file)));
-            } else if (req.body.images) {
-                product.images = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
-            }
+  try {
+    const id = req.params.id as string;
+    const existing = await prisma.product.findUnique({
+      where: { id },
+    });
 
-            const updatedProduct = await product.save();
-            res.json(updatedProduct);
-        } else {
-            res.status(404).json({ message: 'Product not found' });
-        }
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
+    if (!existing) {
+      res.status(404).json({ message: 'Product not found' });
+      return;
     }
+
+    let imagesList: string[] | undefined;
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      imagesList = await Promise.all((req.files as any[]).map((file) => uploadImage(file)));
+    } else if (req.body.images) {
+      imagesList = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+    }
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data: {
+        ...(req.body.name && { name: req.body.name }),
+        ...(req.body.description && { description: req.body.description }),
+        ...(req.body.priceInCoins !== undefined && { priceInCoins: parseFloat(req.body.priceInCoins) }),
+        ...(req.body.category && { category: req.body.category }),
+        ...(req.body.stock !== undefined && { stock: parseInt(req.body.stock, 10) }),
+        ...(imagesList && { images: imagesList }),
+      },
+    });
+
+    res.json(formatProduct(updated));
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const deleteProduct = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (product) {
-            await product.deleteOne();
-            res.json({ message: 'Product removed' });
-        } else {
-            res.status(404).json({ message: 'Product not found' });
-        }
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
+  try {
+    const id = req.params.id as string;
+    const existing = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (existing) {
+      await prisma.product.delete({
+        where: { id },
+      });
+      res.json({ message: 'Product removed' });
+    } else {
+      res.status(404).json({ message: 'Product not found' });
     }
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const blockProduct = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (product) {
-            product.status = 'blocked';
-            await product.save();
-            res.json({ message: 'Product blocked', product });
-        } else {
-            res.status(404).json({ message: 'Product not found' });
-        }
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    const id = req.params.id as string;
+    const updated = await prisma.product.update({
+      where: { id },
+      data: { status: 'blocked' },
+    });
+    res.json({ message: 'Product blocked', product: formatProduct(updated) });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const unblockProduct = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (product) {
-            product.status = 'available';
-            await product.save();
-            res.json({ message: 'Product unblocked', product });
-        } else {
-            res.status(404).json({ message: 'Product not found' });
-        }
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    const id = req.params.id as string;
+    const updated = await prisma.product.update({
+      where: { id },
+      data: { status: 'available' },
+    });
+    res.json({ message: 'Product unblocked', product: formatProduct(updated) });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };

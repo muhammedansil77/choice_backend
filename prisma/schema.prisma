@@ -1,0 +1,148 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  admin
+  user
+}
+
+enum UserStatus {
+  active
+  blocked
+}
+
+enum ProductStatus {
+  available
+  blocked
+}
+
+enum OrderStatus {
+  pending
+  approved
+  rejected
+}
+
+enum TransactionType {
+  mint
+  distribution
+  purchase
+  reclaim
+}
+
+model User {
+  id          String     @id @default(uuid())
+  name        String
+  email       String     @unique
+  password    String
+  phoneNumber String?
+  coinBalance Float      @default(0)
+  role        Role       @default(user)
+  status      UserStatus @default(active)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  orders      Order[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  icon      String   @default("category")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categories")
+}
+
+model Product {
+  id           String        @id @default(uuid())
+  name         String
+  description  String        @db.Text
+  priceInCoins Float
+  category     String
+  images       Json          // Array of image URLs
+  stock        Int           @default(0)
+  status       ProductStatus @default(available)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  orders       Order[]
+
+  @@map("products")
+}
+
+model Order {
+  id         String      @id @default(uuid())
+  userId     String
+  productId  String
+  coinsSpent Float
+  quantity   Int         @default(1)
+  status     OrderStatus @default(pending)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("orders")
+}
+
+model Transaction {
+  id              String          @id @default(uuid())
+  senderId        String          // 'ADMIN' or User UUID
+  receiverId      String          // 'ADMIN' or User UUID
+  amount          Float
+  transactionType TransactionType
+  note            String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("transactions")
+}
+
+model AdminWallet {
+  id               String   @id @default(uuid())
+  totalCoins       Float    @default(0)
+  distributedCoins Float    @default(0)
+  remainingCoins   Float    @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("admin_wallets")
+}
+
+model Otp {
+  id        String   @id @default(uuid())
+  email     String
+  otp       String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("otps")
+}
+
+model ApkRelease {
+  id                    String   @id @default(uuid())
+  appName               String   @default("CHOICE Electricals POS")
+  versionName           String
+  versionCode           Int      @default(1)
+  fileName              String
+  originalFileName      String
+  filePath              String
+  fileSize              Int
+  releaseNotes          String?  @db.Text
+  releaseDate           DateTime @default(now())
+  minimumAndroidVersion String   @default("Android 5.0 (Lollipop)+")
+  isLatest              Boolean  @default(true)
+  downloadsCount        Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("apk_releases")
+}

@@ -1,37 +1,51 @@
-import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
-import User from './models/User';
+import prisma from './prisma';
 
 dotenv.config();
 
 const seedAdmin = async () => {
     try {
-        await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/aoppp_mobile_app');
-
-        const adminExists = await User.findOne({ email: 'admin@example.com' });
+        const adminExists = await prisma.user.findUnique({
+            where: { email: 'admin@example.com' },
+        });
 
         if (adminExists) {
-            console.log('Admin already exists');
-            process.exit();
+            console.log('Admin already exists in MySQL database.');
+            process.exit(0);
         }
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash('admin123', salt);
 
-        await User.create({
-            name: 'Admin User',
-            email: 'admin@example.com',
-            password: hashedPassword,
-            coinBalance: 0,
-            role: 'admin',
-            status: 'active',
+        await prisma.user.create({
+            data: {
+                name: 'Admin User',
+                email: 'admin@example.com',
+                password: hashedPassword,
+                coinBalance: 0,
+                role: 'admin',
+                status: 'active',
+            },
         });
 
-        console.log('Admin user seeded to the database.');
-        process.exit();
+        // Initialize admin wallet if not present
+        const wallet = await prisma.adminWallet.findFirst();
+        if (!wallet) {
+            await prisma.adminWallet.create({
+                data: {
+                    totalCoins: 1000000,
+                    distributedCoins: 0,
+                    remainingCoins: 1000000,
+                },
+            });
+            console.log('Initial Admin Wallet seeded with 1,000,000 coins.');
+        }
+
+        console.log('Admin user seeded to the MySQL database successfully.');
+        process.exit(0);
     } catch (error) {
-        console.error(`Error:`, error);
+        console.error('Error seeding admin:', error);
         process.exit(1);
     }
 };
