@@ -6,7 +6,8 @@ import {
     getMyWallet, 
     distributeCoins,
     mintCoins,
-    getAdminStats
+    getAdminStats,
+    updateTotalPool
 } from '../controllers/coinController';
 import { protect, admin } from '../middlewares/authMiddleware';
 
@@ -15,6 +16,7 @@ const router = express.Router();
 // Admin Routes
 router.get('/stats', protect, admin, getAdminStats);
 router.post('/mint', protect, admin, mintCoins);
+router.put('/pool', protect, admin, updateTotalPool);
 router.post('/add', protect, admin, addCoins);
 router.post('/reclaim', protect, admin, reclaimCoins);
 router.post('/distribute', protect, admin, distributeCoins);

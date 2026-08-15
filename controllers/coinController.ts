@@ -277,3 +277,58 @@ export const getMyWallet = async (req: AuthRequest, res: Response): Promise<void
     res.status(500).json({ message: error.message });
   }
 };
+
+// 8. Admin Updates Total Coin Pool directly
+export const updateTotalPool = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { totalCoins, note } = req.body;
+    const numTotal = parseFloat(totalCoins);
+    if (isNaN(numTotal) || numTotal < 0) {
+      res.status(400).json({ message: 'Invalid total coins amount' });
+      return;
+    }
+
+    let wallet = await prisma.adminWallet.findFirst();
+    if (!wallet) {
+      wallet = await prisma.adminWallet.create({
+        data: { totalCoins: 0, distributedCoins: 0, remainingCoins: 0 },
+      });
+    }
+
+    if (numTotal < wallet.distributedCoins) {
+      res.status(400).json({
+        message: `Total Pool cannot be less than already distributed coins (${wallet.distributedCoins} coins)`,
+      });
+      return;
+    }
+
+    const newRemaining = numTotal - wallet.distributedCoins;
+    const diff = numTotal - wallet.totalCoins;
+
+    const [updatedWallet] = await prisma.$transaction([
+      prisma.adminWallet.update({
+        where: { id: wallet.id },
+        data: {
+          totalCoins: numTotal,
+          remainingCoins: newRemaining,
+        },
+      }),
+      prisma.transaction.create({
+        data: {
+          senderId: 'SYSTEM',
+          receiverId: 'ADMIN',
+          amount: Math.abs(diff),
+          transactionType: diff >= 0 ? 'mint' : 'reclaim',
+          note: note || `Updated Total Pool from ${wallet.totalCoins} to ${numTotal} coins`,
+        },
+      }),
+    ]);
+
+    res.json({
+      message: 'Total coin pool updated successfully',
+      wallet: formatWallet(updatedWallet),
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
