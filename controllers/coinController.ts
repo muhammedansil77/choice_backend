@@ -9,7 +9,9 @@ const formatTransaction = (t: any) => ({
   receiverId: t.receiverId,
   amount: t.amount,
   transactionType: t.transactionType,
+  type: t.transactionType,
   note: t.note,
+  description: t.note || 'Transaction',
   createdAt: t.createdAt,
   updatedAt: t.updatedAt,
 });
@@ -269,9 +271,20 @@ export const getMyWallet = async (req: AuthRequest, res: Response): Promise<void
       orderBy: { createdAt: 'desc' },
     });
 
+    const formattedTransactions = transactions.map((t) => {
+      const isCredit = t.receiverId === req.user?.id;
+      return {
+        ...formatTransaction(t),
+        isCredit,
+        type: isCredit ? 'credit' : (t.transactionType || 'debit'),
+        description: t.note || (isCredit ? 'Coins Received' : 'Coins Spent'),
+      };
+    });
+
     res.json({
       coinBalance: user?.coinBalance || 0,
-      transactions: transactions.map(formatTransaction),
+      balance: user?.coinBalance || 0,
+      transactions: formattedTransactions,
     });
   } catch (error: any) {
     res.status(500).json({ message: error.message });
