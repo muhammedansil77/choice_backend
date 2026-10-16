@@ -64,8 +64,8 @@ model Category {
 
 model Product {
   id           String        @id @default(uuid())
-  name         String
-  description  String        @db.Text
+  name         String        @db.Text
+  description  String        @db.LongText
   priceInCoins Float
   category     String
   images       Json          // Array of image URLs
