@@ -167,11 +167,5 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 
 server.on('error', (err) => {
     console.error('SERVER LISTEN ERROR:', err);
+    process.exit(1);
 });
-
-server.on('close', () => {
-    console.warn('SERVER WAS CLOSED!');
-});
-
-// Keep process active
-setInterval(() => {}, 3600000);

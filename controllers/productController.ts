@@ -1,15 +1,21 @@
 import { Request, Response } from 'express';
-import { v2 as cloudinary } from 'cloudinary';
+const cloudinary = require('cloudinary').v2;
+import path from 'path';
 import dotenv from 'dotenv';
 import prisma from '../prisma';
 
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config();
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+const getCloudinary = () => {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dfpey4ga9',
+    api_key: process.env.CLOUDINARY_API_KEY || '615992456414723',
+    api_secret: process.env.CLOUDINARY_API_SECRET || '2HNYqNo1KMlx9FbmVcaIQ9uxkCU',
+  });
+  return cloudinary;
+};
 
 // Helper to upload a buffer to Cloudinary, falling back to base64 on failure
 const uploadImage = async (file: any): Promise<string> => {
@@ -17,7 +23,8 @@ const uploadImage = async (file: any): Promise<string> => {
   if (typeof file === 'string') {
     if (file.startsWith('data:image')) {
       try {
-        const uploadRes = await cloudinary.uploader.upload(file, { folder: 'aoppp_products' });
+        const client = getCloudinary();
+        const uploadRes = await client.uploader.upload(file, { folder: 'aoppp_products' });
         return uploadRes.secure_url;
       } catch (err) {
         console.warn('Cloudinary upload error for base64 product image:', err);
@@ -31,21 +38,33 @@ const uploadImage = async (file: any): Promise<string> => {
       resolve('');
       return;
     }
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: 'aoppp_products',
-      },
-      (error, result) => {
-        if (error || !result) {
-          console.warn('Cloudinary upload failed, falling back to Base64:', error);
-          const base64Image = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-          resolve(base64Image);
-        } else {
-          resolve(result.secure_url);
+    try {
+      const client = getCloudinary();
+      const uploadStream = client.uploader.upload_stream(
+        {
+          folder: 'aoppp_products',
+        },
+        (error: any, result: any) => {
+          if (error || !result) {
+            console.warn('Cloudinary upload failed, falling back to Base64:', error);
+            const base64Image = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+            resolve(base64Image);
+          } else {
+            resolve(result.secure_url);
+          }
         }
-      }
-    );
-    uploadStream.end(file.buffer);
+      );
+      uploadStream.on('error', (err: any) => {
+        console.warn('uploadStream stream error:', err);
+        const base64Image = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+        resolve(base64Image);
+      });
+      uploadStream.end(file.buffer);
+    } catch (err) {
+      console.warn('Error initiating uploadStream:', err);
+      const base64Image = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+      resolve(base64Image);
+    }
   });
 };
 
@@ -104,6 +123,8 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
       imagesList = await Promise.all(rawList.map((img: any) => uploadImage(img)));
     }
 
+    const productStatus = (req.body.status === 'blocked' || req.body.status === 'unavailable') ? 'blocked' : 'available';
+
     const product = await prisma.product.create({
       data: {
         name,
@@ -112,12 +133,13 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
         category: category || 'General',
         stock: stock ? parseInt(stock, 10) : 0,
         images: imagesList,
-        status: 'available',
+        status: productStatus,
       },
     });
 
     res.status(201).json(formatProduct(product));
   } catch (error: any) {
+    console.error('Error in createProduct:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -150,6 +172,9 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
         ...(req.body.priceInCoins !== undefined && { priceInCoins: parseFloat(req.body.priceInCoins) }),
         ...(req.body.category && { category: req.body.category }),
         ...(req.body.stock !== undefined && { stock: parseInt(req.body.stock, 10) }),
+        ...(req.body.status && { 
+          status: (req.body.status === 'blocked' || req.body.status === 'unavailable') ? 'blocked' : 'available' 
+        }),
         ...(imagesList && { images: imagesList }),
       },
     });
