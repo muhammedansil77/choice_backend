@@ -141,7 +141,7 @@ export const getAllWithdrawals = async (req: AuthRequest, res: Response): Promis
 // 4. Admin approves cash withdrawal & marks paid at store counter
 export const approveWithdrawal = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { adminNotes } = req.body;
 
     const withdrawal = await prisma.cashWithdrawal.findUnique({
@@ -186,7 +186,7 @@ export const approveWithdrawal = async (req: AuthRequest, res: Response): Promis
 // 5. Admin rejects withdrawal and refunds points back to the electrician
 export const rejectWithdrawal = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { reason } = req.body;
 
     const withdrawal = await prisma.cashWithdrawal.findUnique({
