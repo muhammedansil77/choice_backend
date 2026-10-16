@@ -11,8 +11,23 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Helper to upload a buffer to Cloudinary, falling back to base64 on failure
+const uploadBase64ToCloudinary = async (base64Str: string, folder: string): Promise<string> => {
+  if (!base64Str || typeof base64Str !== 'string') return '';
+  if (base64Str.startsWith('http://') || base64Str.startsWith('https://')) return base64Str;
+  try {
+    const uploadRes = await cloudinary.uploader.upload(base64Str, { folder });
+    return uploadRes.secure_url;
+  } catch (err) {
+    console.warn('Cloudinary base64 upload error:', err);
+    return base64Str;
+  }
+};
+
+// Helper to upload a buffer or base64 to Cloudinary, falling back to base64 on failure
 const uploadCategoryImage = async (file: any): Promise<string> => {
+  if (typeof file === 'string') {
+    return uploadBase64ToCloudinary(file, 'aoppp_categories');
+  }
   return new Promise((resolve) => {
     if (!file || !file.buffer) {
       resolve('');
@@ -63,12 +78,19 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
 
     if (req.file) {
       image = await uploadCategoryImage(req.file);
+    } else if (image) {
+      image = await uploadCategoryImage(image);
+    }
+
+    let finalIcon = icon || 'category';
+    if (finalIcon && finalIcon.startsWith('data:image')) {
+      finalIcon = await uploadCategoryImage(finalIcon);
     }
 
     const category = await prisma.category.create({
       data: {
         name,
-        icon: icon || 'category',
+        icon: finalIcon,
         image: image || null,
       },
     });
@@ -108,14 +130,19 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
     if (req.file) {
       image = await uploadCategoryImage(req.file);
     } else if (req.body.image !== undefined) {
-      image = req.body.image;
+      image = await uploadCategoryImage(req.body.image);
+    }
+
+    let finalIcon: string | undefined = undefined;
+    if (icon !== undefined) {
+      finalIcon = icon && icon.startsWith('data:image') ? await uploadCategoryImage(icon) : icon;
     }
 
     const category = await prisma.category.update({
       where: { id },
       data: {
         ...(name && { name }),
-        ...(icon && { icon }),
+        ...(finalIcon && { icon: finalIcon }),
         ...(image !== undefined && { image }),
       },
     });

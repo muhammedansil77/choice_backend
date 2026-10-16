@@ -14,6 +14,17 @@ import { getAdminApkPageHtml } from './views/adminApkPage';
 import { downloadLatestApkFile } from './controllers/apkController';
 
 dotenv.config();
+
+process.on('exit', (code) => {
+    console.log('>>> PROCESS EXIT EVENT with code:', code);
+});
+process.on('uncaughtException', (err) => {
+    console.error('>>> UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('>>> UNHANDLED REJECTION:', reason);
+});
+
 connectDB();
 
 const app = express();
@@ -148,8 +159,19 @@ app.get('/privacy-policy', (req, res) => {
 </html>`);
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
+
+server.on('error', (err) => {
+    console.error('SERVER LISTEN ERROR:', err);
+});
+
+server.on('close', () => {
+    console.warn('SERVER WAS CLOSED!');
+});
+
+// Keep process active
+setInterval(() => {}, 3600000);

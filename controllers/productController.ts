@@ -13,8 +13,21 @@ cloudinary.config({
 
 // Helper to upload a buffer to Cloudinary, falling back to base64 on failure
 const uploadImage = async (file: any): Promise<string> => {
+  if (!file) return '';
+  if (typeof file === 'string') {
+    if (file.startsWith('data:image')) {
+      try {
+        const uploadRes = await cloudinary.uploader.upload(file, { folder: 'aoppp_products' });
+        return uploadRes.secure_url;
+      } catch (err) {
+        console.warn('Cloudinary upload error for base64 product image:', err);
+        return file;
+      }
+    }
+    return file;
+  }
   return new Promise((resolve) => {
-    if (!file || !file.buffer) {
+    if (!file.buffer) {
       resolve('');
       return;
     }
@@ -84,10 +97,11 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
     const { name, description, priceInCoins, category, stock } = req.body;
 
     let imagesList: string[] = [];
-    if (req.files && Array.isArray(req.files)) {
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
       imagesList = await Promise.all((req.files as any[]).map((file) => uploadImage(file)));
     } else if (req.body.images) {
-      imagesList = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+      const rawList = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+      imagesList = await Promise.all(rawList.map((img: any) => uploadImage(img)));
     }
 
     const product = await prisma.product.create({
@@ -124,7 +138,8 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
       imagesList = await Promise.all((req.files as any[]).map((file) => uploadImage(file)));
     } else if (req.body.images) {
-      imagesList = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+      const rawList = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+      imagesList = await Promise.all(rawList.map((img: any) => uploadImage(img)));
     }
 
     const updated = await prisma.product.update({
