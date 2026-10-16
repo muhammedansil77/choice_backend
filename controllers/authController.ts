@@ -148,51 +148,58 @@ export const registerWithOtp = async (req: Request, res: Response): Promise<void
     }
 };
 
-// 4. Send Mobile Phone OTP via Fast2SMS
+// 4. Send Mobile Phone OTP via Fast2SMS (Pure Text SMS, never voice calls)
 export const sendPhoneOtp = async (req: Request, res: Response): Promise<void> => {
     try {
         const { phoneNumber, name } = req.body;
-
         if (!phoneNumber) {
-            res.status(400).json({ message: 'Phone number is required' });
+            res.status(400).json({ message: 'Phone number is required.' });
             return;
         }
 
-        let cleanPhone = phoneNumber.toString().replace(/\D/g, '');
-        if (cleanPhone.length > 10 && cleanPhone.startsWith('91')) {
-            cleanPhone = cleanPhone.slice(2);
+        // Clean phone number (extract digits only)
+        let cleanedPhone = phoneNumber.toString().replace(/\D/g, '');
+        if (cleanedPhone.length > 10 && cleanedPhone.startsWith('91')) {
+            cleanedPhone = cleanedPhone.slice(2);
         }
-        if (cleanPhone.length !== 10) {
-            res.status(400).json({ message: 'Please enter a valid 10-digit mobile number' });
+
+        if (cleanedPhone.length !== 10) {
+            res.status(400).json({ message: 'Please enter a valid 10-digit mobile number.' });
             return;
         }
 
-        // Generate 6-digit OTP code
+        // Generate a 6-digit OTP code
         const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-        // Delete any existing OTPs for this phone number
-        await prisma.otp.deleteMany({
-            where: {
-                phoneNumber: cleanPhone,
-            },
+        // Upsert OTP in database
+        const existingOtp = await prisma.otp.findFirst({
+            where: { phoneNumber: cleanedPhone },
         });
 
-        // Save new OTP with 10-minute expiry
-        await prisma.otp.create({
-            data: {
-                phoneNumber: cleanPhone,
-                name: name ? name.trim() : undefined,
-                otp: generatedOtp,
-                expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-            },
-        });
+        if (existingOtp) {
+            await prisma.otp.update({
+                where: { id: existingOtp.id },
+                data: { otp: generatedOtp, expiresAt, name: name ? name.toString().trim() : existingOtp.name },
+            });
+        } else {
+            await prisma.otp.create({
+                data: {
+                    phoneNumber: cleanedPhone,
+                    email: `${cleanedPhone}@choicepos.com`,
+                    otp: generatedOtp,
+                    name: name ? name.toString().trim() : null,
+                    expiresAt,
+                },
+            });
+        }
 
         // Send OTP via Fast2SMS
-        const smsResult = await sendSmsOtp(cleanPhone, generatedOtp);
+        const smsResult = await sendSmsOtp(cleanedPhone, generatedOtp);
 
         res.status(200).json({
-            message: smsResult.message || 'OTP sent successfully to your mobile number',
-            phoneNumber: cleanPhone,
+            message: smsResult.message || 'OTP sent successfully to your mobile number via SMS.',
+            phoneNumber: cleanedPhone,
             success: true,
             ...(smsResult.fallbackOtp ? { devOtp: smsResult.fallbackOtp } : {}),
         });
@@ -208,7 +215,7 @@ export const verifyPhoneOtp = async (req: Request, res: Response): Promise<void>
         const { phoneNumber, otp, name } = req.body;
 
         if (!phoneNumber || !otp) {
-            res.status(400).json({ message: 'Phone number and verification OTP are required' });
+            res.status(400).json({ message: 'Phone number and verification OTP are required.' });
             return;
         }
 
@@ -219,18 +226,23 @@ export const verifyPhoneOtp = async (req: Request, res: Response): Promise<void>
 
         const cleanOtp = otp.toString().trim();
 
-        // Verify OTP against database
+        // Retrieve active OTP record from database
         const otpRecord = await prisma.otp.findFirst({
             where: {
                 phoneNumber: cleanPhone,
-                otp: cleanOtp,
                 expiresAt: { gte: new Date() },
             },
             orderBy: { createdAt: 'desc' },
         });
 
         if (!otpRecord) {
-            res.status(400).json({ message: 'Invalid or expired verification code' });
+            res.status(400).json({ message: 'No active OTP request found or code has expired. Please request a new code.' });
+            return;
+        }
+
+        // Verify OTP against stored code
+        if (otpRecord.otp !== cleanOtp) {
+            res.status(400).json({ message: 'Invalid verification code. Please check and try again.' });
             return;
         }
 

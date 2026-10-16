@@ -67,7 +67,7 @@ export const downloadLatestApkFile = async (req: Request, res: Response): Promis
 
     if (!validPath) {
       console.error('APK file missing on VPS disk. Checked paths:', possiblePaths);
-      res.status(404).send('APK file not found on server storage. Please upload a new APK at https://api.anzil.online/admin/apk');
+      res.status(404).send('APK file not found on server storage. Please upload a new APK at http://16.176.101.134/admin/apk');
       return;
     }
 

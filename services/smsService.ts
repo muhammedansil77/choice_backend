@@ -10,7 +10,7 @@ export interface SendSmsResult {
 }
 
 /**
- * Sends a 6-digit verification code to the given 10-digit Indian phone number via Fast2SMS
+ * Sends a 6-digit verification code to the given 10-digit Indian phone number via Fast2SMS (Pure Text SMS, never calls)
  */
 export const sendPhoneOtp = async (phoneNumber: string, otp: string): Promise<SendSmsResult> => {
     // 1. Clean phone number - strip country code +91, 91 prefix if 12 digits, spaces, dashes
@@ -25,7 +25,7 @@ export const sendPhoneOtp = async (phoneNumber: string, otp: string): Promise<Se
         };
     }
 
-    // 2. Prepare Fast2SMS Quick Message Payload
+    // 2. Prepare Fast2SMS Message Payload
     const smsMessage = `Your Choice Electricals verification code is ${otp}. Valid for 10 minutes. Please do not share this OTP with anyone.`;
 
     try {
@@ -40,12 +40,12 @@ export const sendPhoneOtp = async (phoneNumber: string, otp: string): Promise<Se
             console.log(`[Fast2SMS] SMS sent successfully to ${cleanPhone}:`, result.message);
             return {
                 success: true,
-                message: 'OTP sent to mobile number via SMS.',
+                message: 'OTP sent to your mobile number via SMS.',
                 gatewayResponse: result,
             };
         }
 
-        // Fast2SMS returned an error response (e.g. 999 min recharge or 996 website verification)
+        // Fast2SMS returned an error response (e.g. 999 min recharge required on fast2sms.com)
         console.warn(`[Fast2SMS Gateway Notice] ${result?.message || 'Gateway rejected message'} (Status Code: ${result?.status_code})`);
         console.log(`[DEV FALLBACK OTP] Verification code for ${cleanPhone}: ${otp}`);
 
