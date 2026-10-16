@@ -28,25 +28,34 @@ enum OrderStatus {
   rejected
 }
 
+enum WithdrawalStatus {
+  pending
+  approved
+  rejected
+}
+
 enum TransactionType {
   mint
   distribution
   purchase
   reclaim
+  withdrawal
+  refund
 }
 
 model User {
-  id          String     @id @default(uuid())
-  name        String
-  email       String?    @unique
-  password    String?
-  phoneNumber String?
-  coinBalance Float      @default(0)
-  role        Role       @default(user)
-  status      UserStatus @default(active)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  orders      Order[]
+  id              String           @id @default(uuid())
+  name            String
+  email           String?          @unique
+  password        String?
+  phoneNumber     String?
+  coinBalance     Float            @default(0)
+  role            Role             @default(user)
+  status          UserStatus       @default(active)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  orders          Order[]
+  cashWithdrawals CashWithdrawal[]
 
   @@map("users")
 }
@@ -148,4 +157,22 @@ model ApkRelease {
   updatedAt             DateTime @updatedAt
 
   @@map("apk_releases")
+}
+
+model CashWithdrawal {
+  id         String           @id @default(uuid())
+  userId     String
+  points     Float
+  cashAmount Float
+  status     WithdrawalStatus @default(pending)
+  notes      String?
+  adminNotes String?
+  approvedAt DateTime?
+  rejectedAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("cash_withdrawals")
 }
