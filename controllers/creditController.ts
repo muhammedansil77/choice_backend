@@ -388,7 +388,14 @@ export const getInvoiceByNumber = async (req: AuthRequest, res: Response): Promi
     }
 
     const clean = invoiceNumber.trim();
-    const withoutInv = clean.replace(/^INV-?/i, '');
+    const withoutInv = clean.replace(/^INV-?/i, '').trim();
+
+    // If user only typed "INV", "INV-", or empty string, do not perform lookup
+    if (!withoutInv) {
+      res.status(404).json({ message: 'Incomplete invoice number' });
+      return;
+    }
+
     const withInv = `INV-${withoutInv}`;
 
     const entry = await prisma.creditEntry.findFirst({
@@ -397,7 +404,6 @@ export const getInvoiceByNumber = async (req: AuthRequest, res: Response): Promi
           { invoiceNumber: clean },
           { invoiceNumber: withInv },
           { invoiceNumber: withoutInv },
-          { invoiceNumber: { contains: clean } },
         ],
       },
       include: {
