@@ -18,6 +18,7 @@ const prisma_1 = __importDefault(require("../prisma"));
  * 1. Admin creates a new credit entry for a user
  */
 const createCreditEntry = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
         const { userId, invoiceNumber, date, category = 'electronic', billAmount = 0, receivedAmount = 0, returnAmount = 0, narration = '', } = req.body;
         if (!userId || !invoiceNumber) {
@@ -47,7 +48,7 @@ const createCreditEntry = (req, res) => __awaiter(void 0, void 0, void 0, functi
         const cleanInvoice = invoiceNumber.toString().trim();
         const withoutInv = cleanInvoice.replace(/^INV-?/i, '');
         const withInv = `INV-${withoutInv}`;
-        // Check if an entry with this invoice number already exists (flexible matching for 101, INV-101, etc.)
+        // Check if an entry with this invoice number already exists
         const existing = yield prisma_1.default.creditEntry.findFirst({
             where: {
                 OR: [
@@ -56,48 +57,22 @@ const createCreditEntry = (req, res) => __awaiter(void 0, void 0, void 0, functi
                     { invoiceNumber: withoutInv },
                 ],
             },
-        });
-        if (existing) {
-            // Calculate effective received & returned taking into account optional new payment
-            const addPayment = parseFloat(req.body.addPayment) || 0;
-            const addReturn = parseFloat(req.body.addReturn) || 0;
-            const effectiveReceived = addPayment > 0 ? (existing.receivedAmount + addPayment) : received;
-            const effectiveReturn = addReturn > 0 ? (existing.returnAmount + addReturn) : returned;
-            const effectiveBill = bill > 0 ? bill : existing.billAmount;
-            const effectiveBalance = Math.max(0, effectiveBill - effectiveReceived - effectiveReturn);
-            let effectiveStatus = 'unpaid';
-            if (effectiveBalance <= 0 && effectiveBill > 0) {
-                effectiveStatus = 'settled';
-            }
-            else if (effectiveReceived > 0 || effectiveReturn > 0) {
-                effectiveStatus = 'partial';
-            }
-            // Update existing invoice with new payment/bill/return amounts
-            const updated = yield prisma_1.default.creditEntry.update({
-                where: { id: existing.id },
-                data: {
-                    userId,
-                    date: date ? new Date(date) : existing.date,
-                    category: cat,
-                    billAmount: effectiveBill,
-                    receivedAmount: effectiveReceived,
-                    returnAmount: effectiveReturn,
-                    balanceAmount: effectiveBalance,
-                    narration: narration ? (existing.narration ? `${existing.narration} | ${narration.toString().trim()}` : narration.toString().trim()) : existing.narration,
-                    status: effectiveStatus,
-                },
-                include: {
-                    user: {
-                        select: {
-                            id: true,
-                            name: true,
-                            phoneNumber: true,
-                            email: true,
-                        },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phoneNumber: true,
+                        email: true,
                     },
                 },
+            },
+        });
+        if (existing) {
+            res.status(400).json({
+                message: `Invoice #${existing.invoiceNumber} already exists for customer ${((_a = existing.user) === null || _a === void 0 ? void 0 : _a.name) || 'Customer'}. Cannot create a duplicate bill.`,
+                existing,
             });
-            res.status(200).json(updated);
             return;
         }
         const entry = yield prisma_1.default.creditEntry.create({
@@ -370,7 +345,12 @@ const getInvoiceByNumber = (req, res) => __awaiter(void 0, void 0, void 0, funct
             return;
         }
         const clean = invoiceNumber.trim();
-        const withoutInv = clean.replace(/^INV-?/i, '');
+        const withoutInv = clean.replace(/^INV-?/i, '').trim();
+        // If user only typed "INV", "INV-", or empty string, do not perform lookup
+        if (!withoutInv) {
+            res.status(404).json({ message: 'Incomplete invoice number' });
+            return;
+        }
         const withInv = `INV-${withoutInv}`;
         const entry = yield prisma_1.default.creditEntry.findFirst({
             where: {
@@ -378,7 +358,6 @@ const getInvoiceByNumber = (req, res) => __awaiter(void 0, void 0, void 0, funct
                     { invoiceNumber: clean },
                     { invoiceNumber: withInv },
                     { invoiceNumber: withoutInv },
-                    { invoiceNumber: { contains: clean } },
                 ],
             },
             include: {

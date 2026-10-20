@@ -1,9 +1,19 @@
 import express from 'express';
-import { createUser, getUsers, blockUser, unblockUser, registerUser, addCoins, getDashboardSummary } from '../controllers/userController';
+import { 
+    createUser, 
+    getUsers, 
+    blockUser, 
+    unblockUser, 
+    registerUser, 
+    addCoins, 
+    getDashboardSummary,
+    updateUserProfile 
+} from '../controllers/userController';
 import { protect, admin } from '../middlewares/authMiddleware';
 
 const router = express.Router();
 
+router.route('/profile').put(protect, updateUserProfile);
 router.route('/register').post(registerUser);
 router.route('/summary').get(protect, admin, getDashboardSummary);
 

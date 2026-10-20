@@ -230,3 +230,31 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
     res.status(500).json({ message: error.message });
   }
 };
+
+export const updateUserProfile = async (req: any, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ message: 'Not authorized, user not identified' });
+      return;
+    }
+
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      res.status(400).json({ message: 'A valid name is required' });
+      return;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: name.trim(),
+      },
+    });
+
+    res.json(formatUser(updatedUser));
+  } catch (error: any) {
+    console.error('Error updating user profile:', error);
+    res.status(500).json({ message: error.message || 'Failed to update user profile' });
+  }
+};
