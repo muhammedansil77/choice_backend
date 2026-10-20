@@ -48,7 +48,7 @@ export const createCreditEntry = async (req: AuthRequest, res: Response): Promis
     const withoutInv = cleanInvoice.replace(/^INV-?/i, '');
     const withInv = `INV-${withoutInv}`;
 
-    // Check if an entry with this invoice number already exists (flexible matching for 101, INV-101, etc.)
+    // Check if an entry with this invoice number already exists
     const existing = await prisma.creditEntry.findFirst({
       where: {
         OR: [
@@ -57,51 +57,23 @@ export const createCreditEntry = async (req: AuthRequest, res: Response): Promis
           { invoiceNumber: withoutInv },
         ],
       },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phoneNumber: true,
+            email: true,
+          },
+        },
+      },
     });
 
     if (existing) {
-      // Calculate effective received & returned taking into account optional new payment
-      const addPayment = parseFloat(req.body.addPayment) || 0;
-      const addReturn = parseFloat(req.body.addReturn) || 0;
-      const effectiveReceived = addPayment > 0 ? (existing.receivedAmount + addPayment) : received;
-      const effectiveReturn = addReturn > 0 ? (existing.returnAmount + addReturn) : returned;
-      const effectiveBill = bill > 0 ? bill : existing.billAmount;
-      const effectiveBalance = Math.max(0, effectiveBill - effectiveReceived - effectiveReturn);
-
-      let effectiveStatus: 'unpaid' | 'partial' | 'settled' = 'unpaid';
-      if (effectiveBalance <= 0 && effectiveBill > 0) {
-        effectiveStatus = 'settled';
-      } else if (effectiveReceived > 0 || effectiveReturn > 0) {
-        effectiveStatus = 'partial';
-      }
-
-      // Update existing invoice with new payment/bill/return amounts
-      const updated = await prisma.creditEntry.update({
-        where: { id: existing.id },
-        data: {
-          userId,
-          date: date ? new Date(date) : existing.date,
-          category: cat,
-          billAmount: effectiveBill,
-          receivedAmount: effectiveReceived,
-          returnAmount: effectiveReturn,
-          balanceAmount: effectiveBalance,
-          narration: narration ? (existing.narration ? `${existing.narration} | ${narration.toString().trim()}` : narration.toString().trim()) : existing.narration,
-          status: effectiveStatus,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              phoneNumber: true,
-              email: true,
-            },
-          },
-        },
+      res.status(400).json({
+        message: `Invoice #${existing.invoiceNumber} already exists for customer ${existing.user?.name || 'Customer'}. Cannot create a duplicate bill.`,
+        existing,
       });
-
-      res.status(200).json(updated);
       return;
     }
 
