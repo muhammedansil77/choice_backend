@@ -6,6 +6,7 @@ import {
   getMyCreditLedger,
   updateCreditEntry,
   deleteCreditEntry,
+  getInvoiceByNumber,
 } from '../controllers/creditController';
 import { protect, admin } from '../middlewares/authMiddleware';
 
@@ -16,6 +17,9 @@ router.get('/my-ledger', protect, getMyCreditLedger);
 
 // Admin: View specific user credit summary
 router.get('/user/:userId', protect, admin, getUserCreditSummaryByAdmin);
+
+// Admin: Lookup existing invoice by invoice number (for auto-fetch)
+router.get('/invoice/:invoiceNumber', protect, admin, getInvoiceByNumber);
 
 // Admin: CRUD operations for credit entries
 router.get('/', protect, admin, getCreditEntriesByAdmin);
