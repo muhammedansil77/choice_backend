@@ -10,6 +10,7 @@ import orderRoutes from './routes/orderRoutes';
 import categoryRoutes from './routes/categoryRoutes';
 import apkRoutes from './routes/apkRoutes';
 import withdrawalRoutes from './routes/withdrawalRoutes';
+import creditRoutes from './routes/creditRoutes';
 import { getDownloadPageHtml } from './views/downloadPage';
 import { getAdminApkPageHtml } from './views/adminApkPage';
 import { downloadLatestApkFile } from './controllers/apkController';
@@ -43,6 +44,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/apk', apkRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
+app.use('/api/credit', creditRoutes);
 
 // PUBLIC DOWNLOAD PAGE ROUTES
 app.get(['/download', '/download/choice-electricals'], (req, res) => {
